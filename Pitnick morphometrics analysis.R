@@ -66,7 +66,7 @@ morph$Testes[ morph$Testes< (-0.015)] <- NA #Remove that extreme outlier-- clear
 #Decided to 
 morph$Testes2 <- ifelse(morph$Testes>0, morph$Testes, min(morph$Testes[morph$Testes>0], na.rm=T))
 
-
+which(morph$Testes<0)
 ##############################################################################################
 #Has thorax length changed depending on the selection regime?
 names(morph)[names(morph)=="Thorax..mm."] <- "Thorax"
@@ -116,15 +116,6 @@ ggsave("~/Montogomerie Work/Drosophila Sperm/Plots/Thorax length.jpeg", units="i
 
 hist(morph$Testes)
 
-# #could winsorize testes mass to get rid of high and low values
-# #better to winsorize by group-- once you winsorize by group you've no longer caused major issues. 
-# morph <- morph %>% group_by(Selection) %>% mutate(WinGSoma= winsor(Soma, trim=0.03), 
-#                                                   WinGTestes = winsor(Testes, trim=0.03))
-# #quantile (morph$Testes, c(0.05, 0.95))
-# hist(morph$WinGTestes)
-# summary(morph$WinGTestes)
-#this rather messes up the distribution
-
 morph$Testes2 [morph$Selection=="CO" & morph$Testes2 >0.009] <- NA #TDiff is high-- probably should be removed
 
 testes <- morph %>% filter(!is.na(Testes2))
@@ -151,8 +142,6 @@ shapiro.test(resid(mod_testes))
 plot(resid(mod_testes)~factor(testes$Selection)) # population IV has slightly less variation but overall pretty OK
 plot(resid(mod_testes)~factor(testes$Line)) #looks all good
 #this looks OK. Fits decently, but could be better (residuals slightly left skewed) 
-
-
 
 
 summary(mod_testes) #don't really need the random effect. 
@@ -199,17 +188,12 @@ ggplot(morph, aes(x=Soma)) +
   facet_grid(Selection~.)
 
 
-
-
-
 mod_soma <- lmer(Soma ~ Selection + (1|Line), data=soma, REML=F)
 plot(mod_soma)
 hist(resid(mod_soma)) #looks great
 shapiro.test(resid(mod_soma))
 plot(resid(mod_soma)~factor(soma$Selection)) # population IV has slightly less variation but overall pretty OK
 plot(resid(mod_soma)~factor(soma$Line)) #looks all good
-
-
 
 
 summary(mod_soma) #don't really need the random effect. 
@@ -288,24 +272,6 @@ newdata<- data.frame(Selection=factor(c(rep("ACO", 20), rep("IV", 20), rep("CO",
                      ucl=NA)
 
 newdata$Predicted <- predict(mam_residgonad, newdata,re.form=~0) #level=0 tells us to ignore the random effect and just pick the mean nest!
-# library(boot)
-# b3 <- bootMer(mam_residgonad,FUN=function(x) predict(x,newdata=newdata,re.form=~0),
-#               ## re.form=~0 is equivalent to use.u=FALSE
-#               nsim=100,seed=101)
-# #### Confidence and prediction intervals for *unobserved* levels
-# bootsum <- function(x,ext="_1") {
-#   d <- data.frame(apply(x$t,2,
-#                         function(x) c(mean(x),quantile(x,c(0.025,0.975)))))
-#   d <- setNames(d,paste0(c("bpred","lwr","upr"),ext))
-#   return(d)
-# }
-# newdata[,4:6]<- t(bootsum(b3,"_3"))
-
-
-
-
-
-
 
 ggplot()+
   geom_point(data=gonad, aes(x=Soma2, y=Testes2, color=Selection, shape=Selection), size=2)+
@@ -388,27 +354,59 @@ ggplot(gonad, aes(x=log(Thorax), y=log(Soma2), color=Selection))+
   geom_point()+
   geom_abline(slope=3.7, intercept = -1.1)
 
-smiMod <- lmodel2::lmodel2(log(Soma2) ~ log(Thorax), data=gonad)
 
+#Calculate SMI either based off of entire population, or only ACO selected population
+##For the entire set of flies. 
+smiMod <- lmodel2::lmodel2(log(Soma2) ~ log(Thorax), data=gonad)
 BSMA <- smiMod$regression.results[3,]
 
+#Based off of only ACO
+smiMod_ACO <- lmodel2::lmodel2(log(Soma2) ~ log(Thorax), data=gonad %>% filter(Selection=="ACO"))
+BSMA_Aco <- smiMod_ACO$regression.results[3,]
+
 #Calculate SMI-- set L0 as the mean body mass of group IV
-
- L0 <- mean(gonad$Thorax[gonad$Selection=="IV"])
-
+L0 <- mean(gonad$Thorax[gonad$Selection=="IV"])
 gonad$SMI <- gonad$Soma2 * ((L0/gonad$Thorax)^BSMA[[3]])
+gonad$SMI_ACO <- gonad$Soma2 * ((L0/gonad$Thorax)^BSMA_Aco[[3]])
 
+################################################################################################################
+#Does selection regime affect SMI?
+
+mod_condition <- lmer(SMI_ACO ~ Selection + (1|Line), data=gonad, REML=F)
+plot(mod_condition)
+hist(resid(mod_condition)) #very good
+shapiro.test(resid(mod_condition))
+plot(resid(mod_condition)~factor(gonad$Selection)) #looks great
+plot(resid(mod_condition)~factor(gonad$Line)) #looks all good
+#Resids not quite normal, but not horrible. Probably OK
+
+
+summary(mod_condition) #don't really need the random effect. 
+dredge(mod_condition)
+anova(mod_condition)
+#SMI not influenced by selection regime
+
+
+GonadLabels <- gonad %>% group_by(Selection) %>% summarize(y =max(SMI_ACO))
+GonadLabels$Label <- c("A", "B", "C")
+
+
+ggplot(gonad, aes(x=Selection, y=SMI_ACO, fill=Selection))+
+  geom_boxplot(show.legend = F, alpha=0.8)+
+  labs(x="Selection regime", y="Scaled mass index")+
+  theme_classic(base_family = "serif", base_size = 14)+
+  #geom_text(data=SomaLabels,  aes(x=Selection, y=y+0.01, label = Label))+
+  scale_fill_grey()
+ggsave("~/Montogomerie Work/Drosophila Sperm/Plots/Soma Mass.jpeg", units="in", height=3, width=4, dev="jpeg")
+
+
+
+#################################################################################################################
 #############Does selection regime affect the relationship between SMI and testes weight? 
-
-
-
-
+#SMI based off of everyone
 ggplot(gonad, aes(x=SMI, y=Testes2, color=Selection))+
   geom_point()+
   geom_smooth(method="lm")
-
-
-
 
 mod_SMI <- lmer(Testes2 ~ SMI * Selection + (1|Line), data=gonad, REML=F)
 
@@ -427,14 +425,55 @@ anova(mod_SMI)
 # no interaction and SMI doesn't really look like it does anything much. 
 
 
-
-
 ggplot(gonad, aes(x=SMI, y=Testes2, color=Selection, shape=Selection))+
   geom_point(size=2)+
-  geom_smooth(method="lm", se=F)+
-labs(x="Scaled Mass Index", y="Testes mass (g)", color="Selection \nregime", shape="Selection \nregime")+
+  #geom_smooth(method="lm", se=F)+
+  labs(x="Scaled Mass Index", y="Testes mass (g)", color="Selection \nregime", shape="Selection \nregime")+
   theme_classic(base_family = "serif", base_size = 14)+
   scale_color_grey()
 ggsave("~/Montogomerie Work/Drosophila Sperm/Plots/Testes Mass by SMI.jpeg", units="in", height=3, width=6, dev="jpeg")
 
+#SMI based off of ACO only
+
+ggplot(gonad, aes(x=SMI_ACO, y=Testes2, color=Selection))+
+  geom_point()+
+  geom_smooth(method="lm")
+
+mod_SMI_ACO <- lmer(Testes2 ~ SMI_ACO * Selection + (1|Line), data=gonad, REML=F)
+
+plot(mod_SMI_ACO)
+hist(resid(mod_SMI_ACO)) #fine
+shapiro.test(resid(mod_SMI_ACO))
+plot(resid(mod_SMI_ACO)~factor(gonad$Selection)) #looks great
+plot(resid(mod_SMI_ACO)~factor(gonad$Line)) #looks all good
+plot(resid(mod_SMI_ACO)~gonad$SMI_ACO) #Looks fantastic
+#Looks oK
+
+summary(mod_SMI_ACO) #don't really need the random effect. 
+dredge(mod_SMI_ACO)
+anova(mod_SMI_ACO)
+#Looks like we probably don't need the interaction but thats it
+
+
+mam_SMI_ACO <- lmer(Testes2 ~ SMI_ACO + Selection + (1|Line), data=gonad, REML=F)
+
+newdata<- data.frame(Selection=factor(c(rep("ACO", 20), rep("IV", 20), rep("CO", 20))), 
+                     SMI_ACO=c(seq(min(gonad$SMI_ACO[gonad$Selection=="ACO"]), max(gonad$SMI_ACO[gonad$Selection=="ACO"]), length.out=20),
+                              seq(min(gonad$SMI_ACO[gonad$Selection=="IV"]), max(gonad$SMI_ACO[gonad$Selection=="IV"]), length.out=20),
+                              seq(min(gonad$SMI_ACO[gonad$Selection=="CO"]), max(gonad$SMI_ACO[gonad$Selection=="CO"]), length.out=20)), 
+                     Predicted=NA, 
+                     lcl=NA, 
+                     ucl=NA)
+
+newdata$Predicted <- predict(mam_SMI_ACO, newdata,re.form=~0) #level=0 tells us to ignore the random effect and just pick the mean nest!
+
+
+
+ggplot(gonad, aes(x=SMI_ACO, y=Testes2, color=Selection, shape=Selection))+
+  geom_point(size=2)+
+  geom_line(data=newdata, aes(x=SMI_ACO, y=Predicted, color=Selection))+
+  labs(x="Scaled Mass Index", y="Testes mass (g)", color="Selection \nregime", shape="Selection \nregime")+
+  theme_classic(base_family = "serif", base_size = 14)+
+  scale_color_grey()
+ggsave("~/Montogomerie Work/Drosophila Sperm/Plots/Testes Mass by SMI (from ACO pop).jpeg", units="in", height=3, width=6, dev="jpeg")
 
