@@ -225,6 +225,7 @@ ggsave("~/Montogomerie Work/Drosophila Sperm/Plots/Soma Mass.jpeg", units="in", 
 
 gonad <- morph %>% filter(!is.na(Testes2) & !is.na(Soma2))
 
+str(gonad)
 
 ggplot(gonad, aes(y=Testes2, x=Soma2, color=Selection))+
   geom_point()+
@@ -250,13 +251,14 @@ emmeans(mod_residgonad)
 summary(mod_residgonad) #don't really need the random effect. 
 dredge(mod_residgonad)
 anova(mod_residgonad)
+car::Anova(mod_residgonad)
 #There are in fact real differences between relative gonad weight in the different populations
 
-lm_residgonad <- lm(Testes2 ~Soma2+Selection , data=gonad, REML=F)
 
 
-mod_residgonad <- lmer(Testes2 ~ Soma2+Selection + (1|Line), data=gonad, REML=F) 
-summary(mod_residgonad)
+mam_residgonad <- lmer(Testes2 ~ Soma2+Selection + (1|Line), data=gonad, REML=F) 
+summary(mam_residgonad)
+anova(mam_residgonad)
 
 #no indication the interaction term does anything. However, I THINK (?) this
 #data is showing that CO puts more investment into the testes relative to the
@@ -275,7 +277,7 @@ newdata$Predicted <- predict(mam_residgonad, newdata,re.form=~0) #level=0 tells 
 
 ggplot()+
   geom_point(data=gonad, aes(x=Soma2, y=Testes2, color=Selection, shape=Selection), size=2)+
-  geom_line(data=newdata, aes(x=Soma2, y=Predicted, color=Selection))+
+  #geom_line(data=newdata, aes(x=Soma2, y=Predicted, color=Selection))+
   labs(x="Soma mass (g)", y="Testes mass (g)", color="Selection \nregime", shape="Selection \nregime")+
   theme_classic(base_family = "serif", base_size = 14)+
   scale_color_grey()
@@ -285,7 +287,7 @@ ggsave("~/Montogomerie Work/Drosophila Sperm/Plots/Testes mass by Soma Mass.jpeg
 
 
 ######################################################################################################################################
-#Has the relative investment in reproductive organs to non-reproductive organs changed based on selection regimes?
+#Has mass to thorax length changed? 
 
 gonad$Mass <- gonad$Soma2 + gonad$Testes2
 
@@ -294,10 +296,6 @@ ggplot(gonad, aes(x=Thorax, y=Mass, color=Selection))+
   labs(x="Thorax", y="Mass")+
   theme_classic(base_family = "serif", base_size = 14)+
   geom_smooth(method="lm")
-
-
-
-
 
 
 mod_mass <- lmer(Mass ~  Selection* Thorax  + (1|Line), data=gonad, REML=F)
@@ -369,6 +367,7 @@ L0 <- mean(gonad$Thorax[gonad$Selection=="IV"])
 gonad$SMI <- gonad$Soma2 * ((L0/gonad$Thorax)^BSMA[[3]])
 gonad$SMI_ACO <- gonad$Soma2 * ((L0/gonad$Thorax)^BSMA_Aco[[3]])
 
+
 ################################################################################################################
 #Does selection regime affect SMI?
 
@@ -384,55 +383,27 @@ plot(resid(mod_condition)~factor(gonad$Line)) #looks all good
 summary(mod_condition) #don't really need the random effect. 
 dredge(mod_condition)
 anova(mod_condition)
+car::Anova(mod_condition)
 #SMI not influenced by selection regime
 
+emmeans(mod_condition, list(pairwise ~ Selection), adjust = "tukey")
 
 GonadLabels <- gonad %>% group_by(Selection) %>% summarize(y =max(SMI_ACO))
-GonadLabels$Label <- c("A", "B", "C")
+GonadLabels$Label <- c("A", "A", "B")
 
 
 ggplot(gonad, aes(x=Selection, y=SMI_ACO, fill=Selection))+
   geom_boxplot(show.legend = F, alpha=0.8)+
   labs(x="Selection regime", y="Scaled mass index")+
   theme_classic(base_family = "serif", base_size = 14)+
-  #geom_text(data=SomaLabels,  aes(x=Selection, y=y+0.01, label = Label))+
+  geom_text(data=GonadLabels,  aes(x=Selection, y=y+0.01, label = Label))+
   scale_fill_grey()
-ggsave("~/Montogomerie Work/Drosophila Sperm/Plots/Soma Mass.jpeg", units="in", height=3, width=4, dev="jpeg")
+ggsave("~/Montogomerie Work/Drosophila Sperm/Plots/SMI_ACO.jpeg", units="in", height=3, width=4, dev="jpeg")
 
 
 
 #################################################################################################################
 #############Does selection regime affect the relationship between SMI and testes weight? 
-#SMI based off of everyone
-ggplot(gonad, aes(x=SMI, y=Testes2, color=Selection))+
-  geom_point()+
-  geom_smooth(method="lm")
-
-mod_SMI <- lmer(Testes2 ~ SMI * Selection + (1|Line), data=gonad, REML=F)
-
-plot(mod_SMI)
-hist(resid(mod_SMI)) #not great
-shapiro.test(resid(mod_SMI))
-plot(resid(mod_SMI)~factor(gonad$Selection)) #looks great
-plot(resid(mod_SMI)~factor(gonad$Line)) #looks all good
-plot(resid(mod_SMI)~gonad$SMI) #Looks fantastic
-#Resids not quite normal, but not horrible. Probably OK
-
-
-summary(mod_SMI) #don't really need the random effect. 
-dredge(mod_SMI)
-anova(mod_SMI)
-# no interaction and SMI doesn't really look like it does anything much. 
-
-
-ggplot(gonad, aes(x=SMI, y=Testes2, color=Selection, shape=Selection))+
-  geom_point(size=2)+
-  #geom_smooth(method="lm", se=F)+
-  labs(x="Scaled Mass Index", y="Testes mass (g)", color="Selection \nregime", shape="Selection \nregime")+
-  theme_classic(base_family = "serif", base_size = 14)+
-  scale_color_grey()
-ggsave("~/Montogomerie Work/Drosophila Sperm/Plots/Testes Mass by SMI.jpeg", units="in", height=3, width=6, dev="jpeg")
-
 #SMI based off of ACO only
 
 ggplot(gonad, aes(x=SMI_ACO, y=Testes2, color=Selection))+
@@ -451,7 +422,7 @@ plot(resid(mod_SMI_ACO)~gonad$SMI_ACO) #Looks fantastic
 
 summary(mod_SMI_ACO) #don't really need the random effect. 
 dredge(mod_SMI_ACO)
-anova(mod_SMI_ACO)
+car::Anova(mod_SMI_ACO)
 #Looks like we probably don't need the interaction but thats it
 
 

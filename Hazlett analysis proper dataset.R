@@ -186,7 +186,7 @@ anova(mam_bundle_nb, mam_bundle_nb2, mam_bundle_nb3, mam_bundle_nb4 , mam_null)
 AICc(mam_bundle_nb, mam_bundle_nb2, mam_bundle_nb3, mam_null)
 car::Anova(mam_bundle_nb)
 summary(mam_bundle_nb)
-emmeans(mam_bundle_nb, list(pairwise ~ Time*Population), adjust = "tukey")
+emmeans(mod_bundle_nb, list(pairwise ~ Time*Population*Treatment2), adjust = "tukey")
 
 SBLables <- sperm %>% group_by(Time, Population) %>% summarize(y =max(SpermBundles))
 
