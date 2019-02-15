@@ -52,7 +52,6 @@ sperm2 <- sperm %>% filter(Time !=2)
 
 
 
-
 ###################################################################################
 #Does the amount of mature sperm found in a fly vary dependings on the
 #population it is from (only 2 options), or how long the fly has been alive?
@@ -119,6 +118,24 @@ summary(mam_mature_nb)
 emmeans(mod_mature_nb, list(pairwise ~ Time*Treatment2+Population), adjust = "tukey")
 
 
+MSLables <- sperm %>% group_by(Treatment2, Time, Population ) %>% summarize(y =max(MatureSperm))
+
+MSLables$Label <- c("A", "B", "CD", "EF", "FG", "FG", "H", "CH", "DE", "FG")
+
+
+
+ggplot(data=sperm, aes(x=Time, y=MatureSperm, fill=Population))+
+  #geom_violin(position=position_dodge(1))+
+  geom_boxplot( alpha=0.8, position=position_dodge(1))+
+  labs(x="Hours", y="Mature sperm", fill="Selection \nregime")+
+  theme_classic(base_family = "serif", base_size = 14)+
+  geom_text(data=MSLables,  aes(x=Time, group=Population, y=y+120, label = Label), position=position_dodge(1))+
+  scale_fill_grey(labels=c("ACO", "CO"))+
+  facet_grid(~Treatment2)
+
+ggsave("~/Montogomerie Work/Drosophila Sperm/Plots/Mature sperm.jpeg", units="in", height=3, width=7, dev="jpeg")
+
+
 ############################################################################################
 #Does the amount of immature sperm found in a fly vary dependings on the
 #population it is from (only 2 options), or how long the fly has been alive?
@@ -156,14 +173,33 @@ AICc(mod_bundle, mod_bundle_nb)
 #Yup that neg bin is much better. Accounts for overdispersion nicely. 
 
 car::Anova(mod_bundle_nb)
+anova(mod_bundle_nb)
 dredge(mod_bundle_nb)
 #looks like there are populaiton and time main effect and a maybe a hint of evidence there might be a time by population interaction
 mam_bundle_nb <- glm.nb(SpermBundles ~ Time+Population, data=sperm)
+mam_bundle_nb2<- glm.nb(SpermBundles ~ Population, data=sperm)
+mam_bundle_nb3 <- glm.nb(SpermBundles ~ Time*Population, data=sperm)
+mam_bundle_nb4 <- glm.nb(SpermBundles ~ Time, data=sperm)
+mam_null <- glm.nb(SpermBundles ~ 1, data=sperm)
 
-emmeans(mam_mature_nb, list(pairwise ~ Time*Population), adjust = "tukey")
-#Not entirely sure this is working properly. 
+anova(mam_bundle_nb, mam_bundle_nb2, mam_bundle_nb3, mam_bundle_nb4 , mam_null)
+AICc(mam_bundle_nb, mam_bundle_nb2, mam_bundle_nb3, mam_null)
+car::Anova(mam_bundle_nb)
+summary(mam_bundle_nb)
+emmeans(mam_bundle_nb, list(pairwise ~ Time*Population), adjust = "tukey")
+
+SBLables <- sperm %>% group_by(Time, Population) %>% summarize(y =max(SpermBundles))
+
+SBLables$Label <- c("A", "B", "A", "B","A", "B")
 
 ggplot(data=sperm, aes(x=Time, y=SpermBundles, fill=Population))+
   #geom_violin(position=position_dodge(1))+
-  geom_boxplot()
-  #stat_summary(fun.y=median, geom="point", size=2, aes(group=Population), position=position_dodge(1))+
+  geom_boxplot( alpha=0.8, position=position_dodge(1))+
+  labs(x="Hours", y="Sperm bundles", fill="Selection \nregime")+
+  theme_classic(base_family = "serif", base_size = 14)+
+  geom_text(data=SBLables,  aes(x=Time, group=Population, y=y+5, label = Label), position=position_dodge(1))+
+  scale_fill_grey(labels=c("ACO", "CO"))
+
+
+ggsave("~/Montogomerie Work/Drosophila Sperm/Plots/Sperm Bundles.jpeg", units="in", height=3, width=4, dev="jpeg")
+
